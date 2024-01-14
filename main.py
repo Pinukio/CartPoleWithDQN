@@ -30,7 +30,7 @@ class ReplayBuffer():
         mini_batch = random.sample(self.buffer, n)
         # transition을 각 list로 분리하기 위함
         # done_mask는 게임이 실행 중일 때 1, 종료되었을 때 0임.
-        state_list, action_list, reward_list, s_prime_list, done_mask_list = []
+        state_list, action_list, reward_list, s_prime_list, done_mask_list = [], [], [], [] ,[]
         
         for transition in mini_batch:
             state, action, reward, s_prime, done_mask = transition
@@ -79,7 +79,7 @@ def train(q, q_target, memory, optimizer):
     for i in range(10):
         # memory: buffer
         state, action, reward, s_prime, done_mask = memory.sample(batch_size)
-
+        
         q_out = q.forward(state)
         # 추측치
         q_a = q_out.gather(1, action)
@@ -95,3 +95,46 @@ def train(q, q_target, memory, optimizer):
         # 계산된 Optimizer로 Gradient Descent
         optimizer.step()
         
+def main():
+    env = gym.make('CartPole-v1')
+    q = Qnet()
+    # Target Network
+    q_target = Qnet()
+    # Target Network에 QNet의 파라미터를 복붙.
+    q_target.load_state_dict(q.state_dict())
+    memory = ReplayBuffer()
+
+    print_interval = 20
+    score = 0.0
+    # Target Network는 QNet의 파라미터를 복붙만 함
+    # 그렇기 때문에 QNet만 학습 대상
+    optimizer = optim.Adam(q.parameters(), lr=learning_rate)
+    
+    for n_epi in range(10000):
+        # decaying epsilon-greedy
+        epsilon = max(0.01, 0.08 - 0.01*(n_epi/200))
+        state = env.reset()[0]
+        done = False
+        while not done:
+            action = q.sample_action(torch.from_numpy(state).float(), epsilon)
+            tmp = env.step(action)
+            s_prime, reward, done, trun, _ = tmp
+            done_mask = 0.0 if done else 1.0
+            memory.put((state, action, reward/100.0, s_prime, done_mask))
+            state = s_prime
+            score += reward
+            if done:
+                break
+
+        # buffer에 2000개 이상 쌓였을 때부터 학습?
+        # Episode가 1번 끝날 때마다 학습??
+        if memory.size() > 2000:
+            train(q, q_target, memory, optimizer)
+
+        if n_epi%print_interval == 0 and n_epi != 0:
+            # Target Network에 QNet 파라미터 복붙
+            q_target.load_state_dict(q.state_dict())
+            print("n_episode :{}, score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(n_epi, score/print_interval, memory.size(), epsilon*100))
+            score = 0.0
+
+main()
