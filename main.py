@@ -1,7 +1,9 @@
 # 바닥부터 배우는 강화 학습 P.206 DQN 구현
 
 import gym
-import collections # deque를 위해 import
+# deque를 위해 import
+# deque는 꽉 차면 자동으로 FIFO
+import collections 
 import random
 
 import torch
@@ -44,4 +46,31 @@ class ReplayBuffer():
     # buffer size를 리턴함.
     def size(self):
         return len(self.buffer)
+
+# 추측치를 학습하는 네트워크
+class Qnet(nn.Module):
+    def __init__(self):
+        super(Qnet, self).__init__()
+        # FC Layer를 사용
+        self.fc1 = nn.Linear(4, 128)
+        self.fc2 = nn.Linear(128, 128)
+        # 선택할 수 있는 Action이 2개
+        self.fc3 = nn.Linear(128, 2)
+
+    # State만 받아서 Action 2개의 Value를 모두 리턴
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        # 출력층은 Identity Function
+        # Action Value는 음수도 가능한데, ReLU는 양수만 뱉기 때문
+        x = self.fc3(x)
+        return x
     
+    def sample_action(self, obs, epsilon):
+        coin = random.random()
+        if coin < epsilon: # 랜덤한 Action을 취하는 경우
+            return random.randint(0, 1)
+        else: # Value가 최대인 Action을 취하는 경우
+            out = self.forward(obs)
+            return out.argmax().item()
+        
