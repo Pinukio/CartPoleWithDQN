@@ -72,5 +72,26 @@ class Qnet(nn.Module):
             return random.randint(0, 1)
         else: # Value가 최대인 Action을 취하는 경우
             out = self.forward(obs)
+            # Value가 최대인 Action을 리턴
             return out.argmax().item()
+    
+def train(q, q_target, memory, optimizer):
+    for i in range(10):
+        # memory: buffer
+        state, action, reward, s_prime, done_mask = memory.sample(batch_size)
+
+        q_out = q.forward(state)
+        # 추측치
+        q_a = q_out.gather(1, action)
+        max_q_prime = q_target(s_prime).max(1)[0].unsqueeze(1)
+        # 정답값
+        target = reward + gamma * max_q_prime * done_mask
+        loss = F.smooth_l1_loss(q_a, target)
+
+        # autoGrad 캐시 영역 초기화?
+        optimizer.zero_grad()
+        # loss에 대한 Gradient 계산
+        loss.backward()
+        # 계산된 Optimizer로 Gradient Descent
+        optimizer.step()
         
